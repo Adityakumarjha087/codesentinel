@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-60 border-r bg-card p-4 transition-transform md:static md:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-60 border-r bg-card p-4 transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
         aria-label="Primary"

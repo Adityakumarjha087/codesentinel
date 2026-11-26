@@ -89,8 +89,25 @@ sequenceDiagram
 
 ## Screenshots
 
-> _Placeholder: add screenshots of the overview dashboard, the review detail page with the Monaco diff viewer
-> and inline comments, and the PR chat panel._
+Captured from the seeded demo stack with [`scripts/screenshots.mjs`](scripts/screenshots.mjs) (1440x900, fixture data only).
+
+![Overview dashboard](docs/screenshots/dashboard.png)
+_Overview: review volume, findings, acceptance rate and LLM cost, with findings over time stacked by severity._
+
+![Review with Monaco diff and inline AI comments](docs/screenshots/review-diff.png)
+_Review detail: Monaco diff of the PR with CodeSentinel findings rendered inline under the flagged lines._
+
+![Findings and PR chat](docs/screenshots/findings-and-chat.png)
+_Findings with suggested changes and accept/dismiss triage, next to a grounded "chat with this PR" answer._
+
+![Review history](docs/screenshots/review-history.png)
+_Review history: every PR review with severity breakdown, tokens, cost and duration._
+
+![Repositories and token budgets](docs/screenshots/repositories.png)
+_Repositories: monthly token budget usage, cost, index status and admin budget controls._
+
+![Dark mode review](docs/screenshots/review-diff-dark.png)
+_The review page in dark mode._
 
 ## Local setup
 

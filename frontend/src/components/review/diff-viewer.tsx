@@ -78,7 +78,8 @@ export function DiffViewer({ file, findings, focusLine }: { file: ReviewFile; fi
         loading={<Spinner label="Loading diff editor…" />}
         options={{
           readOnly: true,
-          renderSideBySide: true,
+          // New files have no left side: inline mode uses the full width.
+          renderSideBySide: file.status !== 'added' && Boolean(file.baseContent),
           glyphMargin: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
