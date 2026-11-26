@@ -1,0 +1,43 @@
+import type { Finding, ReviewListItem } from '@/lib/types';
+
+export const finding = (over: Partial<Finding> = {}): Finding => ({
+  id: 'f1',
+  reviewId: 'r1',
+  category: 'security',
+  severity: 'high',
+  filePath: 'src/db.ts',
+  line: 12,
+  endLine: null,
+  title: 'Possible SQL injection',
+  explanation: 'User input is concatenated into SQL.',
+  suggestion: 'db.query("SELECT 1 WHERE id = $1", [id]);',
+  ruleId: 'security/sql-injection',
+  symbol: 'getUser',
+  codeSnippet: 'db.query("SELECT 1 WHERE id = " + id);',
+  confidence: 0.9,
+  inDiff: true,
+  status: 'open',
+  createdAt: new Date().toISOString(),
+  ...over,
+});
+
+export const reviewItem = (over: Partial<ReviewListItem> = {}): ReviewListItem => ({
+  id: 'r1',
+  status: 'completed',
+  trigger: 'opened',
+  skipReason: null,
+  createdAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
+  completedAt: null,
+  durationMs: 1500,
+  inputTokens: 12000,
+  outputTokens: 800,
+  costUsd: 0.0123,
+  model: 'codesentinel-mock-1',
+  filesReviewed: 2,
+  headSha: 'abc',
+  repo: { id: 'repo1', fullName: 'acme/payments-api' },
+  pullRequest: { id: 'pr1', number: 101, title: 'Add customer search', author: 'dana', url: null },
+  findingsCount: 3,
+  bySeverity: { critical: 1, low: 2 },
+  ...over,
+});
