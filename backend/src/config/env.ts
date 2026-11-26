@@ -52,6 +52,9 @@ export const envSchema = z
 
     LLM_PROVIDER: z.enum(['mock', 'openai', 'anthropic', 'gemini', 'ollama']).default('mock'),
     LLM_MODEL: optionalString,
+    LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+    /** Reviews stuck in queued/running longer than this are re-enqueued by the worker (crash recovery). */
+    STALE_REVIEW_MINUTES: z.coerce.number().int().positive().default(15),
     LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
     OPENAI_API_KEY: optionalString,
     OPENAI_BASE_URL: optionalString,

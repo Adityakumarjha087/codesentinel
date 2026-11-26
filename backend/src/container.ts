@@ -15,6 +15,7 @@ import { createLogger, type Logger } from './lib/logger.js';
 import { createLlmProvider, type FetchLike, type LlmProvider } from './llm/index.js';
 import { BullMqQueue, InlineQueue, redisConnection, type Job, type JobQueue } from './queue/index.js';
 import { ReviewEngine } from './review/engine.js';
+import { recoverStaleReviews } from './review/recovery.js';
 
 export interface Container {
   env: Env;
@@ -32,6 +33,8 @@ export interface Container {
   auth: AuthService;
   oauth: GitHubOAuth;
   handleJob(job: Job): Promise<void>;
+  /** Start consuming jobs and periodically recover stale reviews. */
+  startWorker(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -65,11 +68,16 @@ export async function createContainer(env: Env, overrides: ContainerOverrides = 
     llm,
     indexer,
     logger,
-    options: { maxFileChangedLines: env.MAX_FILE_CHANGED_LINES, maxReviewInputTokens: env.MAX_REVIEW_INPUT_TOKENS, dashboardUrl: env.FRONTEND_URL },
+    options: {
+      maxFileChangedLines: env.MAX_FILE_CHANGED_LINES,
+      maxReviewInputTokens: env.MAX_REVIEW_INPUT_TOKENS,
+      dashboardUrl: env.FRONTEND_URL,
+      llmTimeoutMs: env.LLM_TIMEOUT_MS,
+    },
   });
   const queue = overrides.queue ?? (env.QUEUE_MODE === 'bullmq' ? new BullMqQueue(redisConnection(env.REDIS_URL!), logger) : new InlineQueue(logger));
   const webhooks = new WebhookService(db, queue, logger, env.DEFAULT_MONTHLY_TOKEN_BUDGET);
-  const chat = new PrChatService(db, llm, indexer);
+  const chat = new PrChatService(db, llm, indexer, env.LLM_TIMEOUT_MS);
   const auth = new AuthService(db, {
     jwtSecret: env.JWT_SECRET,
     accessTtlSeconds: env.ACCESS_TOKEN_TTL_SECONDS,
@@ -92,7 +100,17 @@ export async function createContainer(env: Env, overrides: ContainerOverrides = 
     await indexer.indexRepository(repo, job.ref ?? repo.defaultBranch);
   };
 
+  let recoveryTimer: NodeJS.Timeout | undefined;
+  const startWorker = async () => {
+    await queue.startWorker(handleJob, env.WORKER_CONCURRENCY);
+    const recover = () => recoverStaleReviews(db, queue, logger, env.STALE_REVIEW_MINUTES).catch((err) => logger.error({ err }, 'stale review recovery failed'));
+    await recover();
+    recoveryTimer = setInterval(recover, 60_000);
+    recoveryTimer.unref();
+  };
+
   return {
+    startWorker,
     env,
     logger,
     dbHandle,
@@ -109,6 +127,7 @@ export async function createContainer(env: Env, overrides: ContainerOverrides = 
     oauth,
     handleJob,
     async close() {
+      clearInterval(recoveryTimer);
       await queue.close();
       await dbHandle.close();
     },

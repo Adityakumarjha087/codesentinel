@@ -1,7 +1,7 @@
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import type { Logger } from '../lib/logger.js';
 
-export type Job = { type: 'review'; reviewId: string } | { type: 'index'; repoId: string; ref?: string };
+export type Job = { type: 'review'; reviewId: string; attempt?: number } | { type: 'index'; repoId: string; ref?: string };
 export type JobHandler = (job: Job) => Promise<void>;
 
 export interface JobQueue {
@@ -17,7 +17,7 @@ export interface JobQueue {
 
 export const QUEUE_NAME = 'codesentinel-jobs';
 
-const jobId = (job: Job) => (job.type === 'review' ? `review-${job.reviewId}` : `index-${job.repoId}-${job.ref ?? 'default'}-${Date.now()}`);
+const jobId = (job: Job) => (job.type === 'review' ? `review-${job.reviewId}${job.attempt ? `-${job.attempt}` : ''}` : `index-${job.repoId}-${job.ref ?? 'default'}-${Date.now()}`);
 
 /** In-process queue: jobs run asynchronously on the event loop. Used for tests and single-process dev. */
 export class InlineQueue implements JobQueue {

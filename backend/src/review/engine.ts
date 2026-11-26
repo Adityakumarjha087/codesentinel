@@ -51,6 +51,8 @@ export interface ReviewEngineOptions {
   maxReviewInputTokens: number;
   dashboardUrl?: string;
   passConcurrency?: number;
+  /** Per-LLM-call timeout; a timed-out pass fails gracefully without failing the whole review. */
+  llmTimeoutMs?: number;
 }
 
 export interface ReviewEngineDeps {
@@ -76,6 +78,20 @@ const MAX_SYMBOL_CONTEXT_LINES = 150;
 
 export const fingerprintOf = (path: string, line: number, ruleOrTitle: string) =>
   createHash('sha1').update(`${path}:${line}:${ruleOrTitle.toLowerCase()}`).digest('hex').slice(0, 16);
+
+export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
@@ -135,6 +151,9 @@ export class ReviewEngine {
   private async execute(reviewId: string, repo: Repository, pr: PullRequest, log: Logger): Promise<void> {
     const { db, gateway, llm, options } = this.deps;
     const ref: RepoRef = { installationId: repo.installationId, owner: repo.owner, repo: repo.name };
+    // A retried job (worker crash / BullMQ retry) must not duplicate rows from a previous attempt.
+    await db.delete(findingsTable).where(eq(findingsTable.reviewId, reviewId));
+    await db.delete(reviewFiles).where(eq(reviewFiles.reviewId, reviewId));
 
     // 1. Per-repo configuration from the PR head.
     const { config, errors: configErrors, source } = parseRepoConfig(await gateway.getFileContent(ref, CONFIG_FILE_NAME, pr.headSha));
@@ -267,12 +286,16 @@ export class ReviewEngine {
     let model = llm.model;
     const raw = await mapLimit(jobs, options.passConcurrency ?? 4, async ({ pass, batch }) => {
       try {
-        const res = await llm.complete({
-          purpose: `review:${pass}`,
-          system: buildSystemPrompt(PASSES[pass], config),
-          messages: [{ role: 'user', content: batch.prompt }],
-          tools: [reportFindingsTool],
-        });
+        const res = await withTimeout(
+          llm.complete({
+            purpose: `review:${pass}`,
+            system: buildSystemPrompt(PASSES[pass], config),
+            messages: [{ role: 'user', content: batch.prompt }],
+            tools: [reportFindingsTool],
+          }),
+          options.llmTimeoutMs ?? 120_000,
+          `LLM ${pass} pass`,
+        );
         const cost = costUsd(res.provider, res.model, res.usage.inputTokens, res.usage.outputTokens);
         inputTokens += res.usage.inputTokens;
         outputTokens += res.usage.outputTokens;

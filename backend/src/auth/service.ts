@@ -73,7 +73,13 @@ export class AuthService {
       throw unauthorized('Refresh token reuse detected; please sign in again');
     }
     if (record.expiresAt.getTime() < Date.now()) throw unauthorized('Refresh token expired');
-    await this.db.update(refreshTokens).set({ revokedAt: new Date() }).where(eq(refreshTokens.id, record.id));
+    // Atomic claim: only one concurrent rotation of the same token can succeed.
+    const claimed = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.id, record.id), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+    if (!claimed.length) throw unauthorized('Refresh token already used');
     const [user] = await this.db.select().from(users).where(eq(users.id, record.userId));
     if (!user) throw unauthorized('User no longer exists');
     return this.issueTokens(user, record.familyId);
@@ -105,16 +111,12 @@ export class AuthService {
 
   /** Development-only login (AUTH_DEV_LOGIN=true): creates or updates a local user with the given role. */
   async devLogin(login: string, role: UserRole): Promise<User> {
-    const [existing] = await this.db.select().from(users).where(eq(users.login, login));
-    if (existing) {
-      const [updated] = await this.db.update(users).set({ role, lastLoginAt: new Date() }).where(eq(users.id, existing.id)).returning();
-      return updated!;
-    }
-    const [created] = await this.db
+    const [user] = await this.db
       .insert(users)
       .values({ login, name: login.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), role, lastLoginAt: new Date(), avatarUrl: null })
+      .onConflictDoUpdate({ target: users.login, set: { role, lastLoginAt: new Date() } })
       .returning();
-    return created!;
+    return user!;
   }
 
   async getUser(id: string): Promise<User | undefined> {

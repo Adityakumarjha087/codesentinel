@@ -115,6 +115,8 @@ export const reviews = pgTable(
       .references(() => pullRequests.id, { onDelete: 'cascade' }),
     headSha: text('head_sha').notNull(),
     trigger: text('trigger').notNull().default('opened'),
+    /** `<pullRequestId>:<headSha>` for webhook-triggered reviews; enforces one automatic review per commit. */
+    dedupeKey: text('dedupe_key').unique(),
     status: reviewStatus('status').notNull().default('queued'),
     skipReason: text('skip_reason'),
     error: text('error'),

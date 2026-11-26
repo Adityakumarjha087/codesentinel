@@ -1,0 +1,108 @@
+name: codesentinel
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: 3001
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_DRIVER: pg
+  DATABASE_URL: postgres://codesentinel:codesentinel@postgres:5432/codesentinel
+  REDIS_URL: redis://redis:6379
+  QUEUE_MODE: bullmq
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:20300}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:20300}
+  JWT_SECRET: ${JWT_SECRET:-local-compose-jwt-secret-change-me}
+  AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-true}
+  ADMIN_GITHUB_LOGINS: ${ADMIN_GITHUB_LOGINS:-}
+  GITHUB_MODE: ${GITHUB_MODE:-mock}
+  GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+  GITHUB_PRIVATE_KEY: ${GITHUB_PRIVATE_KEY:-}
+  GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-codesentinel-dev-webhook-secret}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  GITHUB_OAUTH_CALLBACK_URL: ${GITHUB_OAUTH_CALLBACK_URL:-http://localhost:20300/api/auth/github/callback}
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_MODEL: ${LLM_MODEL:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: codesentinel
+      POSTGRES_PASSWORD: codesentinel
+      POSTGRES_DB: codesentinel
+    ports: ['20310:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U codesentinel -d codesentinel']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['20311:6379']
+    volumes: ['redisdata:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    image: codesentinel-backend:local
+    environment:
+      <<: *backend-env
+      RUN_WORKER: 'false'
+      AUTO_MIGRATE: 'true'
+    ports: ['20301:3001']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    image: codesentinel-backend:local
+    command: ['node', 'dist/worker.js']
+    environment:
+      <<: *backend-env
+      AUTO_MIGRATE: 'false'
+      WORKER_CONCURRENCY: 4
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  seed:
+    image: codesentinel-backend:local
+    command: ['node', 'dist/db/seed.js']
+    environment:
+      <<: *backend-env
+      AUTO_MIGRATE: 'false'
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      disable: true
+    restart: 'no'
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_INTERNAL_URL: http://backend:3001
+    image: codesentinel-frontend:local
+    ports: ['20300:3000']
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

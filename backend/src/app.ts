@@ -8,6 +8,7 @@ import { hasZodFastifySchemaValidationErrors, jsonSchemaTransform, serializerCom
 import { ROLE_RANK, type AccessClaims } from './auth/service.js';
 import type { Container } from './container.js';
 import type { UserRole } from './db/schema.js';
+import { mapDatabaseError } from './lib/db-errors.js';
 import { AppError, forbidden, unauthorized } from './lib/errors.js';
 import { loggerOptions } from './lib/logger.js';
 import { authRoutes } from './routes/auth.js';
@@ -78,6 +79,17 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
   });
   await app.register(swaggerUi, { routePrefix: '/docs' });
 
+  // Security headers (API responses are JSON; Swagger UI under /docs needs inline assets).
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Cross-Origin-Resource-Policy', 'same-site');
+    if (env.COOKIE_SECURE) reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    if (!req.url.startsWith('/docs')) reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    if (req.url.startsWith('/api/auth')) reply.header('Cache-Control', 'no-store');
+  });
+
   app.decorate('authenticate', async (req: FastifyRequest) => {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw unauthorized();
@@ -96,6 +108,8 @@ export async function buildApp(container: Container): Promise<FastifyInstance> {
         details: error.validation.map((v) => ({ path: v.instancePath, message: v.message })),
       });
     }
+    const dbError = mapDatabaseError(error);
+    if (dbError) return reply.status(dbError.statusCode).send({ error: dbError.code, message: dbError.message });
     if (error instanceof AppError) {
       return reply.status(error.statusCode).send({ error: error.code, message: error.message, details: error.details });
     }

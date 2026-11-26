@@ -7,7 +7,7 @@ const container = await createContainer(env);
 const app = await buildApp(container);
 
 if (env.RUN_WORKER) {
-  await container.queue.startWorker((job) => container.handleJob(job), env.WORKER_CONCURRENCY);
+  await container.startWorker();
   app.log.info({ queue: container.queue.kind }, 'in-process worker started');
 }
 

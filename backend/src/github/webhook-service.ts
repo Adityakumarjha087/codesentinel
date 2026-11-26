@@ -152,20 +152,26 @@ export class WebhookService {
     if (pr.draft) return { status: 'ignored', reason: 'draft pull request' };
     if (!repo.isActive) return { status: 'ignored', reason: 'repository is paused in CodeSentinel' };
 
-    // De-duplicate: one active review per head commit.
-    const [existing] = await this.db
-      .select({ id: reviews.id })
-      .from(reviews)
-      .where(and(eq(reviews.pullRequestId, prRow!.id), eq(reviews.headSha, pr.head.sha), inArray(reviews.status, ['queued', 'running', 'completed'])));
-    if (existing) return { status: 'duplicate', reason: 'commit already reviewed', reviewId: existing.id };
-
+    // De-duplicate atomically: one automatic review per head commit (unique dedupe_key), safe under concurrent deliveries.
+    const dedupeKey = `${prRow!.id}:${pr.head.sha}`;
     const [review] = await this.db
       .insert(reviews)
-      .values({ repoId: repo.id, pullRequestId: prRow!.id, headSha: pr.head.sha, trigger: action, status: 'queued' })
+      .values({ repoId: repo.id, pullRequestId: prRow!.id, headSha: pr.head.sha, trigger: action, status: 'queued', dedupeKey })
+      .onConflictDoNothing({ target: reviews.dedupeKey })
       .returning({ id: reviews.id });
-    await this.queue.enqueue({ type: 'review', reviewId: review!.id });
-    this.logger.info({ repo: repo.fullName, pr: pr.number, reviewId: review!.id }, 'review queued');
-    return { status: 'queued', reviewId: review!.id };
+    if (!review) {
+      const [existing] = await this.db.select({ id: reviews.id, status: reviews.status }).from(reviews).where(eq(reviews.dedupeKey, dedupeKey));
+      if (existing && existing.status === 'failed') {
+        // A failed review of this commit is retried when GitHub re-delivers the event.
+        await this.db.update(reviews).set({ status: 'queued', error: null }).where(and(eq(reviews.id, existing.id), eq(reviews.status, 'failed')));
+        await this.queue.enqueue({ type: 'review', reviewId: existing.id });
+        return { status: 'queued', reason: 'retrying failed review', reviewId: existing.id };
+      }
+      return { status: 'duplicate', reason: 'commit already reviewed', reviewId: existing?.id };
+    }
+    await this.queue.enqueue({ type: 'review', reviewId: review.id });
+    this.logger.info({ repo: repo.fullName, pr: pr.number, reviewId: review.id }, 'review queued');
+    return { status: 'queued', reviewId: review.id };
   }
 
   private async onInstallation(payload: unknown): Promise<WebhookResult> {

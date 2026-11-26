@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { verifySignature } from '../github/signature.js';
-import { unauthorized } from '../lib/errors.js';
+import { AppError, unauthorized } from '../lib/errors.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -42,6 +42,9 @@ export const webhookRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const { env, webhooks } = app.container;
+      if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+        throw new AppError(415, 'unsupported_media_type', 'Webhook content type must be application/json');
+      }
       if (!verifySignature(env.GITHUB_WEBHOOK_SECRET, req.rawBody ?? Buffer.alloc(0), req.headers['x-hub-signature-256'])) {
         req.log.warn({ delivery: req.headers['x-github-delivery'] }, 'webhook signature verification failed');
         throw unauthorized('Invalid webhook signature');
