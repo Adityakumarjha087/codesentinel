@@ -15,6 +15,8 @@ export interface FixturePullRequest {
   changes: Record<string, string | null>;
   /** Already merged/closed — used by the seed script to backfill history. */
   historical?: boolean;
+  /** Override the derived head commit sha (tests simulating new pushes). */
+  headSha?: string;
 }
 
 export interface FixtureRepository {
@@ -505,12 +507,17 @@ export function findFixtureRepo(fullName: string): FixtureRepository | undefined
 }
 
 export function prShas(repo: FixtureRepository, pr: FixturePullRequest) {
-  return { baseSha: fixtureSha(repo.owner, repo.name, 'base'), headSha: fixtureSha(repo.owner, repo.name, pr.number, 'head') };
+  return { baseSha: fixtureSha(repo.owner, repo.name, 'base'), headSha: pr.headSha ?? fixtureSha(repo.owner, repo.name, pr.number, 'head') };
 }
 
 /** Build a GitHub `pull_request` webhook payload for a fixture PR. */
-export function buildPullRequestEvent(fullName: string, number: number, action: 'opened' | 'synchronize' | 'reopened' = 'opened') {
-  const repo = findFixtureRepo(fullName);
+export function buildPullRequestEvent(
+  fullName: string,
+  number: number,
+  action: 'opened' | 'synchronize' | 'reopened' = 'opened',
+  repos: FixtureRepository[] = FIXTURE_REPOSITORIES,
+) {
+  const repo = repos.find((r) => `${r.owner}/${r.name}` === fullName);
   const pr = repo?.pullRequests.find((p) => p.number === number);
   if (!repo || !pr) throw new Error(`Unknown fixture PR ${fullName}#${number}`);
   const { baseSha, headSha } = prShas(repo, pr);

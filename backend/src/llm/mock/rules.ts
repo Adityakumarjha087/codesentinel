@@ -140,7 +140,8 @@ const RULES: Rule[] = [
     explanation:
       'Evaluating strings as code lets anyone who controls the input run arbitrary code in the server process. Parse the data explicitly (e.g. JSON.parse / ast.literal_eval) instead.',
     confidence: 0.88,
-    match: ({ text }) => !isComment(text) && (/(^|[^.\w])eval\s*\(/.test(text) || /new Function\s*\(/.test(text) || /(^|\s)exec\s*\(/.test(text)),
+    match: ({ text }, file) =>
+      !isComment(text) && (/(^|[^.\w])eval\s*\(/.test(text) || /new Function\s*\(/.test(text) || (PY.includes(file.language) && /(^|\s)exec\s*\(/.test(text))),
     suggest: (text, file) => {
       const simple = /(^|[^.\w])eval\(\s*([\w.]+)\s*\)/;
       if (!simple.test(text)) return null;
