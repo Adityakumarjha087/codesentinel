@@ -10,6 +10,18 @@ The whole stack runs **offline with zero API keys**: a fixture-backed GitHub gat
 deterministic mock LLM are the defaults. Real providers (Anthropic Claude, OpenAI, Google Gemini,
 Ollama) and a real GitHub App are selected with environment variables.
 
+## Live demo
+
+| | |
+|---|---|
+| **App** | [codesentinel-sigma.vercel.app](https://codesentinel-sigma.vercel.app) |
+| **API docs** | [codesentinel-api-th9h.onrender.com/docs](https://codesentinel-api-th9h.onrender.com/docs) |
+| **Health** | [codesentinel-api-th9h.onrender.com/api/health](https://codesentinel-api-th9h.onrender.com/api/health) |
+| **Demo login** | click **Sign in with demo account** on the login page |
+
+> Hosted on free tiers (Vercel + Render + Neon Postgres). The backend sleeps after 15 minutes idle, so the
+> first request can take about a minute — open the health link first. Demo limits: mock GitHub and LLM providers; GitHub OAuth login is not configured.
+
 ## Features
 
 - **GitHub App webhooks**: HMAC-SHA256 signature verification on the raw body, delivery-ID idempotency,
