@@ -19,4 +19,6 @@ USER node
 EXPOSE 3001
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "dist/server.js"]
+# Liftoff-only keeps tree-sitter's wasm grammars out of TurboFan, whose compilation of the huge
+# parse-table functions otherwise costs >1 GB RSS (OOM on 512 MB hosts) for no practical speedup.
+CMD ["node", "--liftoff-only", "dist/server.js"]
