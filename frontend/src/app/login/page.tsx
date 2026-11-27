@@ -12,6 +12,9 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Role } from '@/lib/types';
 
+const DEMO_ACCOUNT_BY_ROLE: Record<Role, string> = { admin: 'demo-admin', maintainer: 'maria-maint', viewer: 'victor-view' };
+const DEMO_ACCOUNTS = Object.values(DEMO_ACCOUNT_BY_ROLE);
+
 function LoginForm() {
   const { status, devLogin } = useAuth();
   const router = useRouter();
@@ -20,6 +23,11 @@ function LoginForm() {
   const config = useQuery({ queryKey: ['auth-config'], queryFn: () => api.authConfig() });
   const [login, setLogin] = useState('demo-admin');
   const [role, setRole] = useState<Role>('admin');
+  const onRoleChange = (nextRole: Role) => {
+    setRole(nextRole);
+    // Keep the seeded account in sync with the role so public demos (existing users only) just work.
+    if (DEMO_ACCOUNTS.includes(login)) setLogin(DEMO_ACCOUNT_BY_ROLE[nextRole]);
+  };
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,18 +69,20 @@ function LoginForm() {
         </Button>
         {config.data?.devLogin !== false && (
           <form onSubmit={onSubmit} className="space-y-3 border-t pt-5" aria-label="Demo login">
-            <p className="text-sm text-muted-foreground">Offline demo mode: sign in as a seeded user with a role.</p>
+            <p className="text-sm text-muted-foreground">
+              Offline demo mode: sign in as a seeded user. Picking a role selects its demo account (demo-admin, maria-maint or victor-view).
+            </p>
             <div className="space-y-1">
               <label htmlFor="login" className="text-sm font-medium">
                 Username
               </label>
-              <Input id="login" value={login} onChange={(e) => setLogin(e.target.value)} required pattern="[a-zA-Z0-9_-]{2,39}" />
+              <Input id="login" value={login} onChange={(e) => setLogin(e.target.value)} required pattern="[a-zA-Z0-9_\-]{2,39}" />
             </div>
             <div className="space-y-1">
               <label htmlFor="role" className="text-sm font-medium">
                 Role
               </label>
-              <Select id="role" className="w-full" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <Select id="role" className="w-full" value={role} onChange={(e) => onRoleChange(e.target.value as Role)}>
                 <option value="admin">Admin: manage budgets and team</option>
                 <option value="maintainer">Maintainer: triage findings</option>
                 <option value="viewer">Viewer: read only</option>

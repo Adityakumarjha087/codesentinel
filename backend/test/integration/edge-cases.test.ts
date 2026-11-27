@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { findings, pullRequests, repositories, reviews } from '../../src/db/schema.js';
+import { findings, pullRequests, repositories, reviews, users } from '../../src/db/schema.js';
 import { FIXTURE_REPOSITORIES, type FixtureRepository } from '../../src/fixtures/repos.js';
 import { MockGitHubGateway } from '../../src/github/mock-gateway.js';
 import { signPayload } from '../../src/github/signature.js';
@@ -322,5 +322,32 @@ describe('edge cases: upstream failures, timeouts, recovery, rate limits', () =>
     } finally {
       await t.close();
     }
+  });
+});
+
+describe('public demo: dev login restricted to existing users', () => {
+  let t: Awaited<ReturnType<typeof createTestApp>>;
+
+  beforeAll(async () => {
+    t = await createTestApp({ AUTH_DEV_LOGIN_EXISTING_ONLY: 'true' });
+    await t.container.db.insert(users).values({ login: 'demo-viewer', name: 'Demo Viewer', role: 'viewer', avatarUrl: null });
+  });
+  afterAll(async () => {
+    await t.close();
+  });
+
+  it('rejects unknown logins without creating a user', async () => {
+    const res = await t.app.inject({ method: 'POST', url: '/api/auth/dev-login', payload: { login: 'intruder', role: 'admin' } });
+    expect(res.statusCode).toBe(401);
+    const rows = await t.container.db.select().from(users).where(eq(users.login, 'intruder'));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('signs in existing users but ignores the requested role', async () => {
+    const res = await t.app.inject({ method: 'POST', url: '/api/auth/dev-login', payload: { login: 'demo-viewer', role: 'admin' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.role).toBe('viewer');
+    const [row] = await t.container.db.select().from(users).where(eq(users.login, 'demo-viewer'));
+    expect(row!.role).toBe('viewer');
   });
 });

@@ -40,6 +40,8 @@ export const envSchema = z
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
     COOKIE_SECURE: bool(false),
     AUTH_DEV_LOGIN: bool(true),
+    /** Public demos: dev login only signs in users that already exist (seeded), keeping their stored role. */
+    AUTH_DEV_LOGIN_EXISTING_ONLY: bool(false),
     ADMIN_GITHUB_LOGINS: z.string().default(''),
 
     GITHUB_MODE: z.enum(['mock', 'live']).default('mock'),

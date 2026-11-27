@@ -16,6 +16,8 @@ export interface AuthServiceOptions {
   accessTtlSeconds: number;
   refreshTtlDays: number;
   adminLogins: string[];
+  /** When true, devLogin never creates users or changes roles (safe for public demos). */
+  devLoginExistingOnly?: boolean;
 }
 
 export interface IssuedTokens {
@@ -109,8 +111,16 @@ export class AuthService {
     return created!;
   }
 
-  /** Development-only login (AUTH_DEV_LOGIN=true): creates or updates a local user with the given role. */
+  /**
+   * Development-only login (AUTH_DEV_LOGIN=true): creates or updates a local user with the given role.
+   * With devLoginExistingOnly, only existing users can sign in and their stored role is kept.
+   */
   async devLogin(login: string, role: UserRole): Promise<User> {
+    if (this.opts.devLoginExistingOnly) {
+      const [existing] = await this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.login, login)).returning();
+      if (!existing) throw unauthorized('Unknown demo user');
+      return existing;
+    }
     const [user] = await this.db
       .insert(users)
       .values({ login, name: login.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), role, lastLoginAt: new Date(), avatarUrl: null })

@@ -48,7 +48,7 @@ test('signed webhook -> AI review -> dashboard diff, triage and PR chat', async 
   // 2. Sign in with the demo account (maintainer can triage).
   await page.goto('/');
   await expect(page).toHaveURL(/\/login/);
-  await page.getByLabel('Username').fill('e2e-maintainer');
+  await page.getByLabel('Username').fill('maria-maint');
   await page.getByLabel('Role').selectOption('maintainer');
   await page.getByRole('button', { name: 'Sign in with demo account' }).click();
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
@@ -89,7 +89,7 @@ test('signed webhook -> AI review -> dashboard diff, triage and PR chat', async 
 
 test('viewers cannot triage findings or see the team page', async ({ page }) => {
   await page.goto('/login');
-  await page.getByLabel('Username').fill('e2e-viewer');
+  await page.getByLabel('Username').fill('victor-view');
   await page.getByLabel('Role').selectOption('viewer');
   await page.getByRole('button', { name: 'Sign in with demo account' }).click();
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();

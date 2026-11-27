@@ -83,6 +83,7 @@ export async function createContainer(env: Env, overrides: ContainerOverrides = 
     accessTtlSeconds: env.ACCESS_TOKEN_TTL_SECONDS,
     refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
     adminLogins: env.ADMIN_GITHUB_LOGINS.split(',').map((s) => s.trim()).filter(Boolean),
+    devLoginExistingOnly: env.AUTH_DEV_LOGIN_EXISTING_ONLY,
   });
   const oauth = new GitHubOAuth({
     clientId: env.GITHUB_CLIENT_ID,
