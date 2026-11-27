@@ -6,6 +6,7 @@ import { costUsd, priceFor } from '../../src/llm/pricing.js';
 import { classifyFinding } from '../../src/review/acceptance.js';
 import { createIgnoreMatcher, DEFAULT_CONFIG, DEFAULT_IGNORES, looksGenerated, parseRepoConfig } from '../../src/review/config.js';
 import { loadEnv } from '../../src/config/env.js';
+import { normalizePgUrl } from '../../src/db/client.js';
 
 describe('.codesentinel.yml parsing', () => {
   it('uses defaults when the file is missing', () => {
@@ -151,5 +152,19 @@ describe('environment validation', () => {
     expect(() => loadEnv({ NODE_ENV: 'production' })).toThrow(/JWT_SECRET/);
     expect(() => loadEnv({ EMBEDDING_PROVIDER: 'openai' })).toThrow(/OPENAI_API_KEY/);
     expect(loadEnv({ LLM_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k', RUN_WORKER: 'false' })).toMatchObject({ LLM_PROVIDER: 'anthropic', RUN_WORKER: false });
+  });
+});
+
+describe('hosted deployment config', () => {
+  it('parses SEED_ON_START (default off)', () => {
+    expect(loadEnv({}).SEED_ON_START).toBe(false);
+    expect(loadEnv({ SEED_ON_START: 'true' }).SEED_ON_START).toBe(true);
+  });
+
+  it('strips libpq-only params from Postgres URLs but keeps sslmode', () => {
+    const out = normalizePgUrl('postgresql://u:p@db.example.com/app?sslmode=require&channel_binding=require');
+    expect(out).toBe('postgresql://u:p@db.example.com/app?sslmode=require');
+    expect(normalizePgUrl('postgres://u:p@localhost:5432/app')).toBe('postgres://u:p@localhost:5432/app');
+    expect(normalizePgUrl(undefined)).toBeUndefined();
   });
 });

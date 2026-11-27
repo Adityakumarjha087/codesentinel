@@ -21,6 +21,21 @@ export interface DatabaseHandle {
 
 export const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
+/**
+ * Hosted Postgres URLs (e.g. Neon) may carry libpq-only params such as `channel_binding` that
+ * node-postgres does not understand; drop them and keep everything else (incl. `sslmode`).
+ */
+export function normalizePgUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete('channel_binding');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export async function createDatabase(opts: { driver: 'pg' | 'pglite'; url?: string; dataDir?: string }): Promise<DatabaseHandle> {
   if (opts.driver === 'pglite') {
     const { PGlite } = await import('@electric-sql/pglite');
@@ -39,7 +54,7 @@ export async function createDatabase(opts: { driver: 'pg' | 'pglite'; url?: stri
     };
   }
 
-  const pool = new pg.Pool({ connectionString: opts.url, max: 10 });
+  const pool = new pg.Pool({ connectionString: normalizePgUrl(opts.url), max: 10 });
   const db = drizzlePg(pool, { schema });
   return {
     db: db as unknown as Database,

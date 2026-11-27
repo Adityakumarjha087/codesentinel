@@ -28,6 +28,8 @@ export const envSchema = z
     RUN_WORKER: bool(true),
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
     AUTO_MIGRATE: bool(true),
+    /** Idempotently seed demo data after the API starts listening (single-container hosts without a seed job). */
+    SEED_ON_START: bool(false),
 
     FRONTEND_URL: z.string().default('http://localhost:20300'),
     CORS_ORIGINS: z.string().default('http://localhost:20300'),

@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadEnv } from './config/env.js';
 import { createContainer } from './container.js';
+import { seedDatabase } from './db/seed-data.js';
 
 const env = loadEnv();
 const container = await createContainer(env);
@@ -22,3 +23,10 @@ process.on('SIGINT', () => void shutdown('SIGINT'));
 
 await app.listen({ host: env.HOST, port: env.PORT });
 app.log.info({ llm: container.llm.name, github: container.gateway.mode }, `CodeSentinel API listening on ${env.HOST}:${env.PORT}`);
+
+if (env.SEED_ON_START) {
+  // Runs after listen so the health check passes while the demo data is generated; skips if already seeded.
+  seedDatabase(container)
+    .then((summary) => app.log.info({ summary }, 'seed on start finished'))
+    .catch((err: unknown) => app.log.error({ err }, 'seed on start failed'));
+}
